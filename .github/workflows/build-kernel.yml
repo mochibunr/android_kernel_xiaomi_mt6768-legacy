@@ -1,0 +1,68 @@
+name: Build Lancelot Kernel (LineageOS 20)
+
+on:
+  push:
+    branches:
+      - lineage-20
+    paths:
+      - '.github/workflows/build-kernel.yml'
+      - 'arch/**'
+      - 'drivers/**'
+      - 'include/**'
+      - 'kernel/**'
+      - 'scripts/**'
+      - 'Makefile'
+      - 'Kconfig'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: lineage-20
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential flex gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi libssl-dev libelf-dev make \
+            python3 python-is-python3 rsync zip
+
+      - name: Configure kernel
+        run: |
+          make O=out ARCH=arm64 lancelot_defconfig
+
+      - name: Build kernel
+        run: |
+          make -j"$(nproc)" O=out ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            Image.gz-dtb
+
+      - name: Package output
+        run: |
+          mkdir -p artifact
+          test -s out/arch/arm64/boot/Image.gz-dtb
+          cp out/arch/arm64/boot/Image.gz-dtb artifact/
+          cp out/.config artifact/kernel-config
+          printf 'Source branch: lineage-20\n' > artifact/BUILD-INFO.txt
+          printf 'Commit: %s\n' "$GITHUB_SHA" >> artifact/BUILD-INFO.txt
+          cd artifact
+          zip -9 lancelot-lineage20-kernel.zip Image.gz-dtb kernel-config BUILD-INFO.txt
+
+      - name: Upload kernel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lancelot-lineage20-kernel
+          path: artifact/lancelot-lineage20-kernel.zip
+          if-no-files-found: error
+          retention-days: 14
