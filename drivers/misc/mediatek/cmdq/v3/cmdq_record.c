@@ -2672,7 +2672,7 @@ static s32 cmdq_append_logic_command(struct cmdqRecStruct *handle,
 		return status;
 	}
 
-	CMDQ_MSG("%s REC:0x%p arg_a:0x%p arg_b:0x%08x arg_c:0x%08x s_op:0x%08x\n",__func__,handle, arg_a,arg_b,arg_c, s_op);
+	CMDQ_MSG("%s REC:0x%p arg_a:0x%llx arg_b:0x%llx arg_c:0x%llx s_op:0x%08x\n", __func__, handle, arg_a, arg_b, arg_c, s_op);
 
 	do {
 		u32 cpr_offset = CMDQ_CPR_STRAT_ID + CMDQ_THR_CPR_MAX *
