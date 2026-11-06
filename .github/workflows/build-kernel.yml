@@ -48,21 +48,62 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image.gz-dtb
 
-      - name: Package output
+      - name: Prepare AnyKernel3 installer
+        run: |
+          test -s out/arch/arm64/boot/Image.gz-dtb
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
+          cp out/arch/arm64/boot/Image.gz-dtb anykernel/
+
+          # Customize AnyKernel3 for Lancelot and remove the upstream tuna demo patches.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          script = Path("anykernel/anykernel.sh")
+          text = script.read_text()
+
+          text = text.replace(
+              "kernel.string=ExampleKernel by osm0sis @ xda-developers",
+              "kernel.string=Lancelot LineageOS 20 Kernel"
+          )
+          text = text.replace("device.name1=maguro", "device.name1=lancelot")
+          text = text.replace("device.name2=toro", "device.name2=")
+          text = text.replace("device.name3=toroplus", "device.name3=")
+          text = text.replace("device.name4=tuna", "device.name4=")
+
+          text = text.replace(
+              "BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;",
+              "BLOCK=boot;"
+          )
+          text = text.replace("IS_SLOT_DEVICE=0;", "IS_SLOT_DEVICE=0;")
+
+          # Keep the standard boot unpack/repack/flash flow, but remove demo
+          # ramdisk modifications intended for the unrelated Galaxy Nexus.
+          text = re.sub(
+              r"dump_boot;[^\\n]*\\n.*?^write_boot;[^\\n]*",
+              "dump_boot;\\n\\nwrite_boot;",
+              text,
+              count=1,
+              flags=re.DOTALL | re.MULTILINE
+          )
+          script.write_text(text)
+          PY
+
+      - name: Package AnyKernel3 flashable ZIP
         run: |
           mkdir -p artifact
-          test -s out/arch/arm64/boot/Image.gz-dtb
-          cp out/arch/arm64/boot/Image.gz-dtb artifact/
           cp out/.config artifact/kernel-config
-          printf 'Source branch: lineage-20\n' > artifact/BUILD-INFO.txt
-          printf 'Commit: %s\n' "$GITHUB_SHA" >> artifact/BUILD-INFO.txt
-          cd artifact
-          zip -9 lancelot-lineage20-kernel.zip Image.gz-dtb kernel-config BUILD-INFO.txt
+          printf 'Source branch: lineage-20\\n' > artifact/BUILD-INFO.txt
+          printf 'Commit: %s\\n' "$GITHUB_SHA" >> artifact/BUILD-INFO.txt
 
-      - name: Upload kernel artifact
+          cd anykernel
+          zip -r9 ../artifact/Lancelot-Lineage20-AnyKernel3.zip . \
+            -x '.git/*' 'README.md' '*placeholder*'
+
+      - name: Upload flashable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: lancelot-lineage20-kernel
-          path: artifact/lancelot-lineage20-kernel.zip
+          name: lancelot-lineage20-anykernel3
+          path: artifact/Lancelot-Lineage20-AnyKernel3.zip
           if-no-files-found: error
           retention-days: 14
